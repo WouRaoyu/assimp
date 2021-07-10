@@ -751,7 +751,7 @@ struct Mesh : public Object {
         PrimitiveMode mode;
 
         struct Attributes {
-            AccessorList position, normal, tangent, texcoord, color, joint, jointmatrix, weight;
+            AccessorList position, normal, tangent, texcoord, color, joint, jointmatrix, weight, _batchid;
         } attributes;
 
         Ref<Accessor> indices;

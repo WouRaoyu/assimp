@@ -1043,6 +1043,11 @@ void glTF2Exporter::ExportMeshes()
                 // tangent?
             }
         }
+
+        /******************* _BatchId ********************/
+        std::vector<unsigned short> _batchids(aim->mNumVertices, (unsigned short)idx_mesh);
+        Ref<Accessor> _bi = ExportData(*mAsset, meshId, b, aim->mNumVertices, &_batchids[0], AttribType::SCALAR, AttribType::SCALAR, ComponentType_UNSIGNED_SHORT, BufferViewTarget_ARRAY_BUFFER);
+        if (_bi) p.attributes._batchid.push_back(_bi);
     }
 
     //----------------------------------------

@@ -131,6 +131,10 @@ OPTION ( ASSIMP_IGNORE_GIT_HASH
    OFF
 )
 
+IF(POLICY CMP0054)
+  CMAKE_POLICY(SET CMP0054 NEW)
+ENDIF()
+
 IF ( WIN32 )
     OPTION ( ASSIMP_BUILD_ASSIMP_VIEW
       "If the Assimp view tool is built. (requires DirectX)"

@@ -56,6 +56,10 @@ if (MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING")
 endif()
 
+IF(POLICY CMP0076)
+  CMAKE_POLICY(SET CMP0076 NEW)
+ENDIF()
+
 # Add the temporary output directories to the library path to make sure the
 # Assimp library can be found, even if it is not installed system-wide yet.
 LINK_DIRECTORIES( ${Assimp_BINARY_DIR} ${AssetImporter_BINARY_DIR}/lib )
