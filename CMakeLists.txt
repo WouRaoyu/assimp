@@ -1,6 +1,6 @@
 # Open Asset Import Library (assimp)
 # ----------------------------------------------------------------------
-# Copyright (c) 2006-2020, assimp team
+# Copyright (c) 2006-2021, assimp team
 #
 # All rights reserved.
 #
@@ -34,10 +34,11 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #----------------------------------------------------------------------
+SET(CMAKE_POLICY_DEFAULT_CMP0012 NEW)
 SET(CMAKE_POLICY_DEFAULT_CMP0074 NEW)
 SET(CMAKE_POLICY_DEFAULT_CMP0092 NEW)
 
-CMAKE_MINIMUM_REQUIRED( VERSION 3.0 )
+CMAKE_MINIMUM_REQUIRED( VERSION 3.10 )
 
 # Toggles the use of the hunter package manager
 option(ASSIMP_HUNTER_ENABLED "Enable Hunter package manager support" OFF)
@@ -45,8 +46,8 @@ option(ASSIMP_HUNTER_ENABLED "Enable Hunter package manager support" OFF)
 IF(ASSIMP_HUNTER_ENABLED)
   include("cmake/HunterGate.cmake")
   HunterGate(
-    URL "https://github.com/cpp-pm/hunter/archive/v0.23.269.tar.gz"
-    SHA1 "64024b7b95b4c86d50ae05b926814448c93a70a0"
+    URL "https://github.com/cpp-pm/hunter/archive/v0.23.293.tar.gz"
+    SHA1 "e8e5470652db77149d9b38656db2a6c0b7642693"
   )
 
   add_definitions(-DASSIMP_USE_HUNTER)
@@ -60,7 +61,6 @@ OPTION( BUILD_SHARED_LIBS
   "Build package with shared libraries."
   ON
 )
-
 OPTION( ASSIMP_BUILD_FRAMEWORK
   "Build package as Mac OS X Framework bundle."
   OFF
@@ -136,9 +136,22 @@ IF(POLICY CMP0054)
 ENDIF()
 
 IF ( WIN32 )
-    OPTION ( ASSIMP_BUILD_ASSIMP_VIEW
-      "If the Assimp view tool is built. (requires DirectX)"
-      OFF )
+  # Use subset of Windows.h
+  ADD_DEFINITIONS( -DWIN32_LEAN_AND_MEAN )
+
+  OPTION ( ASSIMP_BUILD_ASSIMP_VIEW
+    "If the Assimp view tool is built. (requires DirectX)"
+    OFF )
+
+  IF(MSVC)
+    OPTION( ASSIMP_INSTALL_PDB
+      "Install MSVC debug files."
+      ON )
+    IF(NOT (MSVC_VERSION LESS 1900))
+      # Multibyte character set is deprecated since at least MSVC2015 (possibly earlier)
+      ADD_DEFINITIONS( -DUNICODE -D_UNICODE )
+    ENDIF()
+  ENDIF()
 ENDIF()
 
 IF (IOS AND NOT ASSIMP_HUNTER_ENABLED)
@@ -148,21 +161,6 @@ IF (IOS AND NOT ASSIMP_HUNTER_ENABLED)
   ADD_DEFINITIONS(-DENABLE_BITCODE)
 ENDIF ()
 
-# Use subset of Windows.h
-if (WIN32)
-  ADD_DEFINITIONS( -DWIN32_LEAN_AND_MEAN )
-endif()
-
-IF(MSVC)
-  OPTION( ASSIMP_INSTALL_PDB
-    "Install MSVC debug files."
-    ON
-  )
-  IF(NOT (MSVC_VERSION LESS 1900))
-    # Multibyte character set is deprecated since at least MSVC2015 (possibly earlier)
-    ADD_DEFINITIONS( -DUNICODE -D_UNICODE )
-  ENDIF()
-ENDIF()
 
 IF (ASSIMP_BUILD_FRAMEWORK)
   SET (BUILD_SHARED_LIBS ON)
@@ -253,12 +251,18 @@ IF ((CMAKE_C_COMPILER_ID MATCHES "GNU") AND NOT CMAKE_COMPILER_IS_MINGW)
     SET(CMAKE_POSITION_INDEPENDENT_CODE ON)
   ENDIF()
   # hide all not-exported symbols
-  SET(CMAKE_CXX_FLAGS "-fvisibility=hidden -fno-strict-aliasing -Wall ${CMAKE_CXX_FLAGS}")
-  SET(CMAKE_C_FLAGS "-fno-strict-aliasing ${CMAKE_C_FLAGS}")
-  SET(LIBSTDC++_LIBRARIES -lstdc++)
+  IF(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "mips64" )
+	SET(CMAKE_CXX_FLAGS "-mxgot -fvisibility=hidden -fno-strict-aliasing -Wall ${CMAKE_CXX_FLAGS}")
+	SET(CMAKE_C_FLAGS "-fno-strict-aliasing ${CMAKE_C_FLAGS}")
+	SET(LIBSTDC++_LIBRARIES -lstdc++)
+  ELSE()
+	SET(CMAKE_CXX_FLAGS "-fvisibility=hidden -fno-strict-aliasing -Wall ${CMAKE_CXX_FLAGS}")
+	SET(CMAKE_C_FLAGS "-fno-strict-aliasing ${CMAKE_C_FLAGS}")
+	SET(LIBSTDC++_LIBRARIES -lstdc++)
+  ENDIF()
 ELSEIF(MSVC)
   # enable multi-core compilation with MSVC
-  IF( "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" ) # clang-cl
+  IF(CMAKE_CXX_COMPILER_ID MATCHES "Clang" ) # clang-cl
     ADD_COMPILE_OPTIONS(/bigobj /W4 /WX )
   ELSE() # msvc
     ADD_COMPILE_OPTIONS(/MP /bigobj /W4 /WX)
@@ -268,7 +272,9 @@ ELSEIF(MSVC)
     ADD_COMPILE_OPTIONS(/wd4351)
   ENDIF()
   SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /D_DEBUG /Zi /Od")
-ELSEIF ( "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" )
+  SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
+  SET(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG:FULL /PDBALTPATH:%_PDB% /OPT:REF /OPT:ICF")
+ELSEIF (CMAKE_CXX_COMPILER_ID MATCHES "Clang" )
   IF(NOT ASSIMP_HUNTER_ENABLED)
     SET(CMAKE_CXX_STANDARD 11)
     SET(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -334,9 +340,9 @@ INCLUDE (FindPkgMacros)
 INCLUDE (PrecompiledHeader)
 
 # Set Assimp project output directory variables.
-SET(ASSIMP_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
-SET(ASSIMP_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
-SET(ASSIMP_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib")
+SET(ASSIMP_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin" CACHE STRING "Path for runtime output files")
+SET(ASSIMP_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin" CACHE STRING "Path for library output files")
+SET(ASSIMP_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib" CACHE STRING "Path for archive output files")
 
 # Macro used to set the output directories of a target to the
 # respective Assimp output directories.
@@ -452,6 +458,12 @@ IF(ASSIMP_HUNTER_ENABLED)
   set(ZLIB_LIBRARIES ZLIB::zlib)
   set(ASSIMP_BUILD_MINIZIP TRUE)
 ELSE()
+  # If the zlib is already found outside, add an export in case assimpTargets can't find it.
+  IF( ZLIB_FOUND )
+    INSTALL( TARGETS zlib zlibstatic
+        EXPORT "${TARGETS_EXPORT_NAME}")
+  ENDIF()
+
   IF ( NOT ASSIMP_BUILD_ZLIB )
     FIND_PACKAGE(ZLIB)
   ENDIF()
@@ -521,12 +533,12 @@ ENDIF()
 MARK_AS_ADVANCED ( ASSIMP_BUILD_ARCHITECTURE ASSIMP_BUILD_COMPILER )
 
 SET ( ASSIMP_BUILD_NONFREE_C4D_IMPORTER OFF CACHE BOOL
-  "Build the C4D importer, which relies on the non-free Melange SDK."
+  "Build the C4D importer, which relies on the non-free Cineware SDK."
 )
 
 IF (ASSIMP_BUILD_NONFREE_C4D_IMPORTER)
   IF ( MSVC )
-    SET(C4D_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Melange/includes")
+    SET(C4D_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Cineware/includes")
 
     # pick the correct prebuilt library
     IF(MSVC15)
@@ -545,28 +557,117 @@ IF (ASSIMP_BUILD_NONFREE_C4D_IMPORTER)
       )
     ENDIF()
 
-    SET(C4D_LIB_BASE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Melange/libraries/win")
+    SET(C4D_LIB_BASE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Cineware/libraries/win")
 
     SET(C4D_DEBUG_LIBRARIES
-      "${C4D_LIB_BASE_PATH}/melangelib${C4D_LIB_POSTFIX}/melangelib_debug.lib"
+      "${C4D_LIB_BASE_PATH}/cinewarelib${C4D_LIB_POSTFIX}/cinewarelib_debug.lib"
       "${C4D_LIB_BASE_PATH}/jpeglib${C4D_LIB_POSTFIX}/jpeglib_debug.lib"
     )
     SET(C4D_RELEASE_LIBRARIES
-      "${C4D_LIB_BASE_PATH}/melangelib${C4D_LIB_POSTFIX}/melangelib_release.lib"
+      "${C4D_LIB_BASE_PATH}/cinewarelib${C4D_LIB_POSTFIX}/cinewarelib_release.lib"
       "${C4D_LIB_BASE_PATH}/jpeglib${C4D_LIB_POSTFIX}/jpeglib_release.lib"
     )
 
-    # winsock and winmm are necessary dependencies of melange (this is undocumented, but true.)
+    # winsock and winmm are necessary (and undocumented) dependencies of Cineware SDK because
+    # it can be used to communicate with a running Cinema 4D instance
     SET(C4D_EXTRA_LIBRARIES WSock32.lib Winmm.lib)
   ELSE ()
     MESSAGE( FATAL_ERROR
-      "C4D is currently only available on Windows with melange SDK installed in contrib/Melange"
+      "C4D is currently only available on Windows with Cineware SDK installed in contrib/Cineware"
     )
   ENDIF ()
 ELSE ()
   ADD_DEFINITIONS( -DASSIMP_BUILD_NO_C4D_IMPORTER )
 ENDIF ()
 
+# Draco requires cmake 3.12
+IF (DEFINED CMAKE_VERSION AND "${CMAKE_VERSION}" VERSION_LESS "3.12")
+  message(NOTICE "draco requires cmake 3.12 or newer, cmake is ${CMAKE_VERSION} . Draco is disabled")
+  SET ( ASSIMP_BUILD_DRACO OFF CACHE BOOL "Disabled: Draco requires newer cmake" FORCE )
+ELSE()
+  OPTION ( ASSIMP_BUILD_DRACO "If the Draco libraries are to be built. Primarily for glTF" OFF )
+  IF ( ASSIMP_BUILD_DRACO )
+    # Primarily for glTF v2
+    # Enable Draco glTF feature set
+    set(DRACO_GLTF ON CACHE BOOL "" FORCE)
+    # Disable unnecessary or omitted components
+    set(DRACO_JS_GLUE OFF CACHE BOOL "" FORCE)
+    set(DRACO_WASM OFF CACHE BOOL "" FORCE)
+    set(DRACO_MAYA_PLUGIN OFF CACHE BOOL "" FORCE)
+    set(DRACO_UNITY_PLUGIN OFF CACHE BOOL "" FORCE)
+    set(DRACO_TESTS OFF CACHE BOOL "" FORCE)
+
+    IF(ASSIMP_HUNTER_ENABLED)
+      hunter_add_package(draco)
+      find_package(draco CONFIG REQUIRED)
+      set(draco_LIBRARIES draco::draco)
+    ELSE()
+      # Draco 1.4.1 has many warnings and will not build with /WX or -Werror
+      # See https://github.com/google/draco/issues/672
+      # and https://github.com/google/draco/issues/673
+      IF(MSVC)
+        set(DRACO_CXX_FLAGS "/W0")
+      ELSE()
+        list(APPEND DRACO_CXX_FLAGS
+          "-Wno-bool-compare"
+          "-Wno-comment"
+          "-Wno-maybe-uninitialized"
+          "-Wno-sign-compare"
+          "-Wno-unused-local-typedefs"
+        )
+        # Draco 1.4.1 does not explicitly export any symbols under GCC/clang
+        list(APPEND DRACO_CXX_FLAGS
+          "-fvisibility=default"
+        )
+      ENDIF()
+
+      # Don't build or install all of Draco by default
+      ADD_SUBDIRECTORY( "contrib/draco" EXCLUDE_FROM_ALL )
+
+      if(MSVC OR WIN32)
+        set(draco_LIBRARIES "draco")
+      else()
+        if(BUILD_SHARED_LIBS)
+          set(draco_LIBRARIES "draco_shared")
+        else()
+          set(draco_LIBRARIES "draco_static")
+        endif()
+      endif()
+
+      # Don't build the draco command-line tools by default
+      set_target_properties(draco_encoder draco_decoder PROPERTIES
+        EXCLUDE_FROM_ALL TRUE
+        EXCLUDE_FROM_DEFAULT_BUILD TRUE
+        )
+
+      # Do build the draco shared library
+      set_target_properties(${draco_LIBRARIES} PROPERTIES
+        EXCLUDE_FROM_ALL FALSE
+        EXCLUDE_FROM_DEFAULT_BUILD FALSE
+        )
+
+      TARGET_USE_COMMON_OUTPUT_DIRECTORY(${draco_LIBRARIES})
+      TARGET_USE_COMMON_OUTPUT_DIRECTORY(draco_encoder)
+      TARGET_USE_COMMON_OUTPUT_DIRECTORY(draco_decoder)
+
+      set(draco_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/contrib/draco/src")
+
+      # This is probably wrong
+      INSTALL( TARGETS ${draco_LIBRARIES}
+        EXPORT "${TARGETS_EXPORT_NAME}"
+        LIBRARY DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
+        ARCHIVE DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
+        RUNTIME DESTINATION ${ASSIMP_BIN_INSTALL_DIR}
+        FRAMEWORK DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
+        COMPONENT ${LIBASSIMP_COMPONENT}
+        INCLUDES DESTINATION include
+    )
+
+    ENDIF()
+  ENDIF()
+ENDIF()
+
+# Main assimp code
 ADD_SUBDIRECTORY( code/ )
 IF ( ASSIMP_BUILD_ASSIMP_TOOLS )
   # The viewer for windows only
@@ -580,7 +681,7 @@ IF ( ASSIMP_BUILD_ASSIMP_TOOLS )
   ADD_SUBDIRECTORY( tools/assimp_cmd/ )
 ENDIF ()
 
-IF ( ASSIMP_BUILD_SAMPLES)
+IF ( ASSIMP_BUILD_SAMPLES )
   SET( SAMPLES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/samples )
   SET( SAMPLES_SHARED_CODE_DIR ${SAMPLES_DIR}/SharedCode )
   IF ( WIN32 )

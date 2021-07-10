@@ -2,7 +2,7 @@
 Open Asset Import Library (assimp)
 ----------------------------------------------------------------------
 
-Copyright (c) 2006-2020, assimp team
+Copyright (c) 2006-2021, assimp team
 
 
 All rights reserved.
@@ -530,8 +530,8 @@ void XFileExporter::writePath(const aiString &path)
     while( str.find( "\\\\") != std::string::npos)
         str.replace( str.find( "\\\\"), 2, "\\");
 
-    while( str.find( "\\") != std::string::npos)
-        str.replace( str.find( "\\"), 1, "/");
+    while (str.find('\\') != std::string::npos)
+        str.replace(str.find('\\'), 1, "/");
 
     mOutput << str;
 
